@@ -1,0 +1,177 @@
+{\rtf1\fbidis\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Segoe UI;}{\f1\fnil Segoe UI;}}
+{\colortbl ;\red0\green0\blue0;}
+{\*\generator Riched20 10.0.22621}\viewkind4\uc1 
+\pard\tx720\cf1\f0\fs38 11/7/23\f1\par
+\par
+Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-vpc"\par
+\f0\par
+\par
+\ul\b provider.tf\ulnone\b0\par
+provider "aws" \{\par
+  region = "us-east-1"\par
+\}\par
+\par
+\par
+\ul\b locals.tf\ulnone\b0\par
+locals \{\par
+  project_tags = \{    \par
+    contact = "devops@jjtech.com"\par
+    application = "payments"\par
+    project = "jjtech"\par
+    environment = "$\{terraform.workspace\}"\par
+    creationTime = timestamp()\par
+  \}\par
+\}\par
+\par
+\ul\b main.tf\ulnone\b0\par
+module "vpc" \{\par
+ source = "./vpc" \par
+ tags = local.project_tags\par
+\}\par
+\par
+\ul\b vpc.tf\ulnone\b0\par
+\par
+resource "aws_vpc" "main" \{\par
+  cidr_block = var.vpc_cidr_block\par
+  \par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-vpc"\par
+    \par
+  \})\par
+\}\par
+resource "aws_subnet" "public_subnet1" \{\par
+  vpc_id     = aws_vpc.main.id\par
+  cidr_block = var.public_subnet1_cidr_block\par
+  availability_zone = var.availability_zones[0]\par
+  map_public_ip_on_launch = true\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-public-subnet1"\par
+    \par
+  \})\par
+\}\par
+resource "aws_subnet" "public_subnet2" \{\par
+  vpc_id     = aws_vpc.main.id\par
+  cidr_block = var.public_subnet2_cidr_block\par
+  availability_zone = var.availability_zones[1]\par
+  map_public_ip_on_launch = true\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-public-subnet2"\par
+  \})\par
+\}\par
+resource "aws_subnet" "private_subnet1" \{\par
+  vpc_id     = aws_vpc.main.id\par
+  cidr_block = var.private_subnet1_cidr_block\par
+  availability_zone = var.availability_zones[0]\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-private-subnet1"\par
+  \})\par
+\}\par
+resource "aws_subnet" "private_subnet2" \{\par
+  vpc_id     = aws_vpc.main.id\par
+  cidr_block = var.private_subnet2_cidr_block\par
+  availability_zone = var.availability_zones[1]  \par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-private-subnet2"\par
+  \})\par
+\}\par
+resource "aws_internet_gateway" "gw" \{\par
+  vpc_id = aws_vpc.main.id\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-igw"\par
+  \})\par
+\}\par
+resource "aws_route_table" "public_route_table" \{\par
+  vpc_id = aws_vpc.main.id\par
+  route \{\par
+    cidr_block = "0.0.0.0/0"\par
+    gateway_id = aws_internet_gateway.gw.id\par
+  \}\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-public-rt"\par
+  \})  \par
+\}\par
+resource "aws_route_table_association" "public_subnet1_association" \{\par
+  subnet_id      = aws_subnet.public_subnet1.id\par
+  route_table_id = aws_route_table.public_route_table.id\par
+  \par
+\}\par
+resource "aws_route_table_association" "public_subnet2_association" \{\par
+  subnet_id      = aws_subnet.public_subnet2.id\par
+  route_table_id = aws_route_table.public_route_table.id\par
+\}\par
+resource "aws_eip" "eip" \{\par
+  domain   = "vpc"\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-eip"\par
+  \})\par
+  \par
+\}\par
+resource "aws_nat_gateway" "nat_gw" \{\par
+  allocation_id = aws_eip.eip.id\par
+  subnet_id     = aws_subnet.public_subnet1.id\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-nat-gw"\par
+  \})\par
+  # To ensure proper ordering, it is recommended to add an explicit dependency\par
+  # on the Internet Gateway for the VPC.\par
+  depends_on = [aws_eip.eip, aws_subnet.public_subnet1]\par
+\}\par
+resource "aws_route_table" "private_route_table" \{\par
+  vpc_id = aws_vpc.main.id\par
+  route \{\par
+    cidr_block = "0.0.0.0/0"\par
+    gateway_id = aws_nat_gateway.nat_gw.id\par
+  \}\par
+  tags = merge(var.tags, \{\par
+    Name = "$\{var.tags["project"]\}-$\{var.tags["application"]\}-$\{var.tags["environment"]\}-private-rt"\par
+  \})  \par
+\}\par
+resource "aws_route_table_association" "private_subnet1_association" \{\par
+  subnet_id      = aws_subnet.private_subnet1.id\par
+  route_table_id = aws_route_table.private_route_table.id\par
+\}\par
+resource "aws_route_table_association" "private_subnet2_association" \{\par
+  subnet_id      = aws_subnet.private_subnet2.id\par
+  route_table_id = aws_route_table.private_route_table.id\par
+\}\par
+\par
+\ul\b var.tf\ulnone\b0\par
+\par
+variable "vpc_cidr_block" \{\par
+  description = "CIDR block for the main VPC"\par
+  type        = string\par
+  default     = "10.0.0.0/16"\par
+\}\par
+variable "public_subnet1_cidr_block" \{\par
+  description = "CIDR block for the public subnet 1"\par
+  type        = string\par
+  default     = "10.0.1.0/24"\par
+\}\par
+variable "public_subnet2_cidr_block" \{\par
+  description = "CIDR block for the public subnet 2"\par
+  type        = string\par
+  default     = "10.0.2.0/24"\par
+\}\par
+variable "private_subnet1_cidr_block" \{\par
+  description = "CIDR block for the private subnet 1"\par
+  type        = string\par
+  default     = "10.0.3.0/24"\par
+\}\par
+variable "private_subnet2_cidr_block" \{\par
+  description = "CIDR block for the private subnet 2"\par
+  type        = string\par
+  default     = "10.0.4.0/24"\par
+\}\par
+variable "availability_zones" \{\par
+    type = list(string)\par
+    description = "(optional) describe your variable"\par
+    default = [ "us-east-1a", "us-east-1b" ]\par
+\}\par
+variable "tags" \{\par
+  type = map\par
+  description = "tags"\par
+\}\par
+\par
+\par
+\f1\par
+}
